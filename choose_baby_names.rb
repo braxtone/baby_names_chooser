@@ -3,10 +3,6 @@
 require 'json'
 require 'pp'
 
-# Get bulk list of names, separate by gender
-# Remove names of facebook friends
-# Remove shared boy/girl names
-
 ## Methods
 def get_names(filename)
   File.readlines(filename).map { |name| (name.slice(0,1).capitalize + name.slice(1..-1)).chomp }.uniq
@@ -40,7 +36,7 @@ def review_names(names)
     reviewed_names[:selected] += chosen_names
 	end
 
-  reviewed_names[:to_review] = names
+  reviewed_names[:to_review] = names.sort!
 
   puts "You've selected the following names: #{reviewed_names[:selected].join(", ")}, with #{reviewed_names[:to_review].size} names left to review."
   reviewed_names
@@ -51,24 +47,34 @@ def present_main_menu(names)
 
   while choice != "q"
     puts "Please make a selection from the menu below and press Enter."
-    puts %q{
-    [b] - Choose boy names
-    [g] - Choose girl names
+    puts <<-menu 
+    [b] - Choose boy names (#{names[:to_review][:boy].size} names to review)
+    [g] - Choose girl names (#{names[:to_review][:girl].size} names to review)
     [r] - Resume previous session
     [q] - Save and quit
-    }
+    menu
     choice = $stdin.gets.downcase.strip!
     case choice
     when "b"
       reviewed_names = review_names(names[:to_review][:boy])
-      names[:selected][:boy] = reviewed_names[:selected] | names[:selected][:boy]
+      names[:selected][:boy] = (reviewed_names[:selected] | names[:selected][:boy]).sort!
       names[:to_review][:boy] = reviewed_names[:to_review]
-      puts "Complete list of selected names: #{names[:selected][:boy].join(", ")}"
+      puts "Narrowed the list down to #{names[:selected][:boy].size} names."
+      if names[:to_review][:boy].size == 0
+        puts "Moving selected names to review list..."
+        names[:to_review][:boy] = names[:selected][:boy].clone
+        names[:selected][:boy].clear
+      end
     when "g"
       reviewed_names = review_names(names[:to_review][:girl])
       names[:selected][:girl] = reviewed_names[:selected] | names[:selected][:girl]
       names[:to_review][:girl] = reviewed_names[:to_review]
-      puts "Complete list of selected names: #{names[:selected][:girl].join(", ")}"
+      puts "Narrowed the list down to #{names[:selected][:girl].size} names."
+      if names[:to_review][:girl].size == 0
+        puts "Moving selected names to review list..."
+        names[:to_review][:girl] = names[:selected][:girl].clone
+        names[:selected][:girl].clear
+      end
     when "r"
       filename = "./baby_names.resume"
       puts "Please enter the name of the file you'd like to resume from. (default #{filename.inspect})"
@@ -82,8 +88,8 @@ def present_main_menu(names)
          puts "Success!"
          puts "Overall selected names: #{names[:selected][:boy].join(", ")}"
          puts "Names to review:"
-         puts "\t Boy: #{names[:to_review][:boy].size}" 
-         puts "\t Girl: #{names[:to_review][:girl].size}" 
+         puts "\t Boy: #{names[:to_review][:boy].sort!.size}" 
+         puts "\t Girl: #{names[:to_review][:girl].sort!.size}" 
         rescue => e
           puts "Error reading file: #{e}"
         end
@@ -91,7 +97,12 @@ def present_main_menu(names)
         puts "The file doesn't exist."
       end
     when "q"
-	  File.open("./baby_names.resume", "w") { |f| f.write names.to_json }
+      save_filename = "./baby_names.resume"
+      puts "Choose filename for resume file. (defaults to #{save_filename.inspect})"
+      input_filename = $stdin.gets.strip.downcase
+      save_filename = input_filename unless input_filename == ""
+      puts "Saving state to #{save_filename}..."
+      File.open(save_filename, "w") { |f| f.write names.to_json }
       break
     else
       puts "Choice not recognized, please try again."
@@ -123,6 +134,5 @@ names[:to_review].keys.each do |gender|
 end
 
 names = names.merge(remove_ambiguous_names(names))
-names[:to_review].each { |gender, names| puts "Got #{names.size} #{gender.to_s} names." }
 
 present_main_menu(names)
